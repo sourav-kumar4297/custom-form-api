@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com"; 
+  const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com";
   const ADMIN_API_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
   const customer = req.body.customer;
