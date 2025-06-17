@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   // --- Main logic ---
   const { customer_id } = req.query;
 
-  const SHOPIFY_STORE_DOMAIN = "yourstore.myshopify.com"; // replace with actual store domain
+  const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com";
   const ADMIN_API_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
   try {
