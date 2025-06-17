@@ -1,15 +1,14 @@
 export default async function handler(req, res) {
-  // --- CORS headers ---
+  // CORS setup
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', 'https://essentiahome.com');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   res.setHeader('Access-Control-Allow-Origin', 'https://essentiahome.com');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method !== "POST") {
@@ -18,55 +17,49 @@ export default async function handler(req, res) {
 
   const { customer_id, preference } = req.body;
 
-  const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com"; 
+  const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com";
   const ADMIN_API_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
   try {
-    // First, check if the metafield already exists
-    const getRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}/metafields.json`, {
-      method: "GET",
+    // Step 1: Fetch customer details
+    const getCustomer = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}.json`, {
       headers: {
         "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
         "Content-Type": "application/json"
       }
     });
 
-    const getData = await getRes.json();
-    const existing = getData.metafields.find(f => f.key === "cashback_preference");
+    const customerData = await getCustomer.json();
+    const currentTags = customerData.customer.tags.split(',').map(tag => tag.trim());
 
-    const metafieldPayload = {
-      metafield: {
-        namespace: "custom",
-        key: "cashback_preference",
-        type: "single_line_text_field",
-        value: preference
-      }
-    };
+    // Step 2: Clean old preference tags
+    const updatedTags = currentTags.filter(tag => !tag.startsWith('cashback_preference:'));
+    updatedTags.push(`cashback_preference:${preference}`);
 
-    const method = existing ? "PUT" : "POST";
-    const url = existing
-      ? `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/metafields/${existing.id}.json`
-      : `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}/metafields.json`;
-
-    const saveRes = await fetch(url, {
-      method,
+    // Step 3: Update tags
+    const updateRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}.json`, {
+      method: "PUT",
       headers: {
         "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(metafieldPayload)
+      body: JSON.stringify({
+        customer: {
+          id: customer_id,
+          tags: updatedTags.join(', ')
+        }
+      })
     });
 
-    const saveData = await saveRes.json();
-
-    if (!saveRes.ok) {
-      throw new Error(saveData.errors || "Failed to save metafield");
+    const updateData = await updateRes.json();
+    if (!updateRes.ok) {
+      throw new Error(updateData.errors || "Failed to update customer tags");
     }
 
     return res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("Error saving preference:", err);
+    console.error("Error saving tag:", err);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 }
