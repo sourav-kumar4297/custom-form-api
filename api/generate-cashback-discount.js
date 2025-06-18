@@ -87,7 +87,9 @@ export default async function handler(req, res) {
     }
 
     const code = json.data?.discountCodeBasicCreate?.discountCodeNode?.codeDiscount?.code;
+    console.log("✅ Created discount code:", code);
     return res.status(200).json({ success: true, code });
+    
 
   } catch (err) {
     console.error("Server Error:", err);
