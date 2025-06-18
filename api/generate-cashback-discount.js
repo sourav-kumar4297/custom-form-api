@@ -1,6 +1,13 @@
-// File: /api/generate-cashback-discount.js
-
 export default async function handler(req, res) {
+  // --- Allow CORS ---
+  res.setHeader('Access-Control-Allow-Origin', 'https://essentiahome.com');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end(); // preflight check
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -16,7 +23,7 @@ export default async function handler(req, res) {
   const generatedCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
 
   try {
-    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/discounts/code.json`, {
+    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/discount_codes.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
