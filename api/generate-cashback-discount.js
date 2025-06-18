@@ -1,6 +1,15 @@
-// File: /api/generate-cashback-discount.js
-
 export default async function handler(req, res) {
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(200).end();
+    return;
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -22,7 +31,6 @@ export default async function handler(req, res) {
   const discountCode = `CB-${customer_id.slice(-4)}-${Date.now()}`;
 
   try {
-    // Step 1: Create Price Rule
     const priceRuleRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/price_rules.json`, {
       method: "POST",
       headers: {
@@ -54,7 +62,6 @@ export default async function handler(req, res) {
 
     const priceRuleId = priceRuleData.price_rule.id;
 
-    // Step 2: Create Discount Code
     const discountRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/price_rules/${priceRuleId}/discount_codes.json`, {
       method: "POST",
       headers: {
@@ -75,7 +82,6 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Discount code creation failed", details: discountData });
     }
 
-    // Final success response
     return res.status(200).json({
       success: true,
       code: discountData.discount_code.code,
