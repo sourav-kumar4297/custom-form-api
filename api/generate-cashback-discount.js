@@ -7,54 +7,82 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { customer_id, customer_email, cashback_amount } = req.body;
+  const { customer_id, cashback_amount } = req.body;
 
-  if (!customer_id || !customer_email || cashback_amount === undefined) {
-    console.error("❌ Missing fields:", { customer_id, customer_email, cashback_amount });
+  if (!customer_id || cashback_amount === undefined) {
+    console.error("❌ Missing fields:", { customer_id, cashback_amount });
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  try {
-    const totalDiscount = (Math.round(cashback_amount * 100) / 100).toFixed(2); // round to 2 decimals
-    const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
-    const adminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+  const code = `CB${customer_id.slice(-4)}-${Date.now()}`;
+  const fixedValue = Math.round(parseFloat(cashback_amount || 0));
+  const token = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
-    const discountPayload = {
-      discount_code: {
-        code: discountCode,
-        usage_limit: 1,
-        customer_selection: "prerequisite",
-        customer_ids: [Number(customer_id)],
-        starts_at: new Date().toISOString(),
-        applies_once: true,
-        combines_with_discount_applications: false,
-        value_type: "fixed_amount",
-        value: parseFloat(totalDiscount),
-        applies_to: { all: true }
+  const mutation = `
+    mutation discountCodeBasicCreate {
+      discountCodeBasicCreate(
+        basicCodeDiscount: {
+          title: "${code}",
+          code: "${code}",
+          startsAt: "${new Date().toISOString()}",
+          usageLimit: 1,
+          customerSelection: {
+            customers: ["gid://shopify/Customer/${customer_id}"]
+          },
+          combinesWith: {
+            orderDiscounts: false,
+            productDiscounts: false,
+            shippingDiscounts: false
+          },
+          customerGets: {
+            value: {
+              combine: [
+                { percentage: { value: 10 } },
+                { fixedAmount: { amount: ${fixedValue}, appliesOnEachItem: false } }
+              ]
+            },
+            appliesOn: { allItems: true }
+          }
+        }
+      ) {
+        discountCodeNode {
+          codeDiscount {
+            ... on DiscountCodeBasic {
+              code
+            }
+          }
+        }
+        userErrors {
+          field
+          message
+        }
       }
-    };
+    }
+  `;
 
-    const response = await fetch("https://demoessentiahome.myshopify.com/admin/api/2023-10/price_rules.json", {
+  try {
+    const response = await fetch("https://demoessentiahome.myshopify.com/admin/api/2024-04/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": adminToken
+        "X-Shopify-Access-Token": token
       },
-      body: JSON.stringify(discountPayload)
+      body: JSON.stringify({ query: mutation })
     });
 
-    const result = await response.json();
+    const json = await response.json();
+    const error = json?.data?.discountCodeBasicCreate?.userErrors;
+    const discount = json?.data?.discountCodeBasicCreate?.discountCodeNode?.codeDiscount;
 
-    if (!result.discount_code || !result.discount_code.code) {
-      console.error("❌ Shopify discount API failed:", result);
+    if (error?.length || !discount?.code) {
+      console.error("❌ GraphQL Error:", error);
       return res.status(500).json({ error: "Failed to create discount code" });
     }
 
-    const finalCode = result.discount_code.code;
-    return res.status(200).json({ success: true, code: finalCode });
+    return res.status(200).json({ success: true, code: discount.code });
 
   } catch (err) {
-    console.error("🔥 Server error while creating discount:", err);
+    console.error("🔥 Server Error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
