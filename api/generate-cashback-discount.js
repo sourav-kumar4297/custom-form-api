@@ -70,7 +70,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({ query: mutation })
     });
 
-    const json = await response.json();
+    const json = await response?.json();
     const error = json?.data?.discountCodeBasicCreate?.userErrors;
     const discount = json?.data?.discountCodeBasicCreate?.discountCodeNode?.codeDiscount;
 
