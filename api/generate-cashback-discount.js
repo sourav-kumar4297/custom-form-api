@@ -1,99 +1,60 @@
 export default async function handler(req, res) {
-  // CORS HEADERS
+  // CORS Headers
   res.setHeader("Access-Control-Allow-Origin", "https://essentiahome.com");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { customer_id, customer_email, cashback_amount } = req.body;
 
   if (!customer_id || !customer_email || cashback_amount === undefined) {
-    console.error("❌ Missing required fields:", { customer_id, customer_email, cashback_amount });
+    console.error("❌ Missing fields:", { customer_id, customer_email, cashback_amount });
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const roundedCashback = Math.round(cashback_amount);
-  const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
-  const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
-
-  // Combined Discount - 10% + Cashback
-  const mutation = `
-    mutation {
-      discountCodeBasicCreate(basicCodeDiscount: {
-        title: "${discountCode}",
-        code: "${discountCode}",
-        startsAt: "${new Date().toISOString()}",
-        usageLimit: 1,
-        customerSelection: {
-          customers: ["gid://shopify/Customer/${customer_id}"]
-        },
-        combinesWith: {
-          orderDiscounts: false,
-          productDiscounts: false,
-          shippingDiscounts: false
-        },
-        customerGets: {
-          items: { all: true },
-          value: {
-            onAllItems: true,
-            combine: [
-              { percentage: { value: 10 } },
-              { fixedAmount: { amount: ${roundedCashback}, appliesOnEachItem: false } }
-            ]
-          }
-        }
-      }) {
-        userErrors {
-          field
-          message
-        }
-        discountCodeNode {
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              code
-            }
-          }
-        }
-      }
-    }
-  `;
-
   try {
-    const response = await fetch("https://demoessentiahome.myshopify.com/admin/api/2024-04/graphql.json", {
+    const totalDiscount = (Math.round(cashback_amount * 100) / 100).toFixed(2); // round to 2 decimals
+    const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
+    const adminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+
+    const discountPayload = {
+      discount_code: {
+        code: discountCode,
+        usage_limit: 1,
+        customer_selection: "prerequisite",
+        customer_ids: [Number(customer_id)],
+        starts_at: new Date().toISOString(),
+        applies_once: true,
+        combines_with_discount_applications: false,
+        value_type: "fixed_amount",
+        value: parseFloat(totalDiscount),
+        applies_to: { all: true }
+      }
+    };
+
+    const response = await fetch("https://demoessentiahome.myshopify.com/admin/api/2023-10/price_rules.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": SHOPIFY_ADMIN_API_TOKEN
+        "X-Shopify-Access-Token": adminToken
       },
-      body: JSON.stringify({ query: mutation })
+      body: JSON.stringify(discountPayload)
     });
 
-    const json = await response.json();
-    const errors = json.data?.discountCodeBasicCreate?.userErrors;
+    const result = await response.json();
 
-    if (errors?.length) {
-      console.error("❌ GraphQL Errors:", errors);
-      return res.status(500).json({ error: errors[0].message });
+    if (!result.discount_code || !result.discount_code.code) {
+      console.error("❌ Shopify discount API failed:", result);
+      return res.status(500).json({ error: "Failed to create discount code" });
     }
 
-    const code = json.data?.discountCodeBasicCreate?.discountCodeNode?.codeDiscount?.code;
-    if (!code) {
-      console.error("❌ Discount code not returned from API.");
-      return res.status(500).json({ error: "Discount code not returned from API" });
-    }
-
-    console.log("✅ Created discount code:", code);
-    return res.status(200).json({ success: true, code });
+    const finalCode = result.discount_code.code;
+    return res.status(200).json({ success: true, code: finalCode });
 
   } catch (err) {
-    console.error("🔥 Internal server error:", err);
+    console.error("🔥 Server error while creating discount:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
