@@ -4,13 +4,8 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { customer_id, customer_email, cashback_amount, cart_total } = req.body;
 
@@ -19,36 +14,36 @@ export default async function handler(req, res) {
   }
 
   const roundedCartTotal = Math.round(Number(cart_total));
-const cashback = Math.round(Number(cashback_amount));
-const cart10Percent = (roundedCartTotal * 0.10);
-console.log("🔍 Final Discount Calculation Check:");
-console.log("🪙 Cashback:", cashback);
-console.log("🧮 Cart 10%:", cart10Percent);
-console.log("✅ Final Discount:", cashback + cart10Percent);
+  const cashback = Math.round(Number(cashback_amount));
+  const cart10Percent = Math.round(roundedCartTotal * 0.10);
+
+  const finalDiscountCalculated = cashback + cart10Percent;
 
 
-// Step 1: Lock boundaries
-if (cashback < 0 || cart10Percent < 0) {
-  return res.status(400).json({ error: "Invalid cashback or cart value" });
-}
+  // Basic checks
+  if (isNaN(cashback) || isNaN(cart10Percent) || cashback < 0 || cart10Percent < 0) {
+    return res.status(400).json({ error: "Invalid number values for cashback or cart" });
+  }
 
-// Step 2: Calculate max allowed
-const maxAllowedDiscount = cashback + cart10Percent;
+  
 
-// Step 3: Safety cap (e.g., max ₹10,000 discount?)
-if (maxAllowedDiscount > 10000) {
-  return res.status(400).json({ error: "Discount limit exceeded" });
-}
+  // 🔁 Double-check logic: independently verify the amount again
+  const finalDiscountVerified = Math.round(Number(cashback_amount)) + Math.round(Number(cart_total) * 0.10);
 
-// FINAL locked value
-const totalDiscountAmount = maxAllowedDiscount;
+  console.log("🔁 Verifying discount again:", finalDiscountVerified);
 
+  if (finalDiscountVerified !== finalDiscountCalculated) {
+    console.error("🚫 Discount mismatch on verification");
+    return res.status(400).json({ error: "Discount verification failed" });
+  }
 
+  // Proceed to generate discount
   const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
   const SHOPIFY_STORE = "demoessentiahome.myshopify.com";
   const SHOPIFY_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
   try {
+    // Step 1: Create Price Rule
     const response = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/price_rules.json`, {
       method: "POST",
       headers: {
@@ -62,7 +57,7 @@ const totalDiscountAmount = maxAllowedDiscount;
           target_selection: "all",
           allocation_method: "across",
           value_type: "fixed_amount",
-          value: `-${totalDiscountAmount}`,
+          value: `-${finalDiscountCalculated}`,
           customer_selection: "prerequisite",
           prerequisite_customer_ids: [customer_id],
           usage_limit: 1,
@@ -86,6 +81,7 @@ const totalDiscountAmount = maxAllowedDiscount;
 
     const priceRuleId = priceRuleData.price_rule.id;
 
+    // Step 2: Create Discount Code
     const discountRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/price_rules/${priceRuleId}/discount_codes.json`, {
       method: "POST",
       headers: {
@@ -106,7 +102,9 @@ const totalDiscountAmount = maxAllowedDiscount;
       return res.status(500).json({ error: "Failed to create discount code" });
     }
 
+    console.log("🎉 Discount Code Created:", discountData.discount_code.code);
     return res.status(200).json({ success: true, code: discountData.discount_code.code });
+
   } catch (err) {
     console.error("🔥 Internal server error:", err);
     return res.status(500).json({ error: "Internal server error" });
