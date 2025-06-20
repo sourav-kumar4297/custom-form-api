@@ -23,20 +23,14 @@ export default async function handler(req, res) {
   }
 
   const cashback = rawCashback;
-  const cart10Percent = rawCartTotal * 0.10;
+  const cart10Percent = (rawCartTotal * 10)/100;
   const finalDiscount = cashback + cart10Percent;
   const totalDiscountAmount = Math.round(finalDiscount); // Only round once at final step
 
-  console.log("🔍 Discount Calculation Debug:");
-  console.log("🧾 Cart Total (raw):", rawCartTotal);
-  console.log("🪙 Cashback (raw):", cashback);
-  console.log("🔟 10% of Cart (raw):", cart10Percent);
-  console.log("✅ Final Discount (rounded):", totalDiscountAmount);
 
   if (cashback < 0 || cart10Percent < 0) {
     return res.status(400).json({ error: "Invalid cashback or cart value" });
   }
-
 
 
   const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
