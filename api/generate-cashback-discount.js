@@ -13,11 +13,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const roundedCartTotal = Math.round(Number(cart_total));
-  const cashback = Math.round(Number(cashback_amount));
-  const cart10Percent = Math.round(roundedCartTotal * 0.10);
+ const rawCartTotal = Number(cart_total);
+const rawCashback = Number(cashback_amount);
 
-  const finalDiscountCalculated = cashback + cart10Percent;
+const cashback = rawCashback;
+const cart10Percent = rawCartTotal * 0.10;
+
+const finalDiscount = cashback + cart10Percent;
+const totalDiscountAmount = Math.round(finalDiscount);
 
 
   // Basic checks
