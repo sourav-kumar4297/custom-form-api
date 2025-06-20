@@ -47,10 +47,6 @@ export default async function handler(req, res) {
 
   console.log("✅ Final Discount:", maxAllowedDiscount);
 
-  // Optional cap to protect from extreme values
-  if (maxAllowedDiscount > 10000) {
-    return res.status(400).json({ error: "Discount limit exceeded" });
-  }
 
   const discountCode = `CB${String(customer_id).slice(-4)}-${Date.now()}`;
   const SHOPIFY_STORE = "demoessentiahome.myshopify.com";
