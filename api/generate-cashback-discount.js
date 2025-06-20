@@ -25,10 +25,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  // Parse and round numbers safely
   const roundedCartTotal = Math.round(Number(cart_total));
   const cashback = Math.round(Number(cashback_amount));
   const cart10Percent = Math.round(roundedCartTotal * 0.10);
-  const totalDiscountAmount = cashback + cart10Percent;
+  
 
   console.log("📊 Parsed Values:");
   console.log("🪙 Cashback:", cashback);
@@ -47,6 +48,7 @@ export default async function handler(req, res) {
 
   console.log("✅ Final Discount:", maxAllowedDiscount);
 
+
   const discountCode = `CB${String(customer_id).slice(-4)}-${Date.now()}`;
   const SHOPIFY_STORE = "demoessentiahome.myshopify.com";
   const SHOPIFY_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
@@ -56,6 +58,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Step 1: Create Price Rule
     const priceRuleRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/price_rules.json`, {
       method: "POST",
       headers: {
@@ -80,7 +83,7 @@ export default async function handler(req, res) {
             product_discounts: false,
             shipping_discounts: false,
           },
-          ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // Optional: expires in 24 hrs
         }
       })
     });
@@ -93,6 +96,7 @@ export default async function handler(req, res) {
 
     const priceRuleId = priceRuleData.price_rule.id;
 
+    // Step 2: Create Discount Code
     const discountRes = await fetch(`https://${SHOPIFY_STORE}/admin/api/2023-10/price_rules/${priceRuleId}/discount_codes.json`, {
       method: "POST",
       headers: {
@@ -120,4 +124,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Internal server error" });
   }
 }
-
