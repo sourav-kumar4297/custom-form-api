@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
   const roundedCartTotal = Math.round(Number(cart_total));
 const cashback = Math.round(Number(cashback_amount));
-const cart10Percent = Math.round(roundedCartTotal * 0.10);
+const cart10Percent = (roundedCartTotal * 0.10);
 console.log("🔍 Final Discount Calculation Check:");
 console.log("🪙 Cashback:", cashback);
 console.log("🧮 Cart 10%:", cart10Percent);
