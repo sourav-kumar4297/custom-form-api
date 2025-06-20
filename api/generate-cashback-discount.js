@@ -18,10 +18,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const roundedCashback = Math.round(Number(cashback_amount));
   const roundedCartTotal = Math.round(Number(cart_total));
-  const tenPercent = Math.round(roundedCartTotal * 0.10);
-  const totalDiscountAmount = roundedCashback + tenPercent;
+const cashback = Math.round(Number(cashback_amount));
+const cart10Percent = Math.round(roundedCartTotal * 0.10);
+console.log("🔍 Final Discount Calculation Check:");
+console.log("🪙 Cashback:", cashback);
+console.log("🧮 Cart 10%:", cart10Percent);
+console.log("✅ Final Discount:", cashback + cart10Percent);
+
+
+// Step 1: Lock boundaries
+if (cashback < 0 || cart10Percent < 0) {
+  return res.status(400).json({ error: "Invalid cashback or cart value" });
+}
+
+// Step 2: Calculate max allowed
+const maxAllowedDiscount = cashback + cart10Percent;
+
+// Step 3: Safety cap (e.g., max ₹10,000 discount?)
+if (maxAllowedDiscount > 10000) {
+  return res.status(400).json({ error: "Discount limit exceeded" });
+}
+
+// FINAL locked value
+const totalDiscountAmount = maxAllowedDiscount;
+
 
   const discountCode = `CB${customer_id.slice(-4)}-${Date.now()}`;
   const SHOPIFY_STORE = "demoessentiahome.myshopify.com";
