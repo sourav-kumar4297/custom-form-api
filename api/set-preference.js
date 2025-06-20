@@ -21,7 +21,6 @@ export default async function handler(req, res) {
   const ADMIN_API_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
   try {
-    // Step 1: Fetch customer details
     const getCustomer = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}.json`, {
       headers: {
         "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
@@ -32,11 +31,9 @@ export default async function handler(req, res) {
     const customerData = await getCustomer.json();
     const currentTags = customerData.customer.tags.split(',').map(tag => tag.trim());
 
-    // Step 2: Clean old preference tags
     const updatedTags = currentTags.filter(tag => !tag.startsWith('cashback_preference:'));
     updatedTags.push(`cashback_preference:${preference}`);
 
-    // Step 3: Update tags
     const updateRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customer_id}.json`, {
       method: "PUT",
       headers: {
@@ -51,15 +48,15 @@ export default async function handler(req, res) {
       })
     });
 
-    const updateData = await updateRes.json();
     if (!updateRes.ok) {
-      throw new Error(updateData.errors || "Failed to update customer tags");
+      const errData = await updateRes.json();
+      throw new Error(errData.errors || "Failed to update tags");
     }
 
     return res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("Error saving tag:", err);
+    console.error("💥 Preference Update Failed:", err);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 }
