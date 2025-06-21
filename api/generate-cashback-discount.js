@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     console.log("🧠 Customer Tags:", tags);
     console.log("💡 Preference:", hasDiscountPreference ? "discount" : "bank");
     console.log("💰 Cashback:", cashback);
+    console.log("totalcart amount", rawCartTotal);
     console.log("🧮 Cart 10%:", cart10Percent);
     console.log("✅ Total Discount:", totalDiscount);
 
