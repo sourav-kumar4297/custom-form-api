@@ -1,3 +1,4 @@
+// Backend code to allow existing customers to apply for trade account with metafields
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "https://essentiahome.com");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -12,23 +13,35 @@ export default async function handler(req, res) {
   const customer = req.body.customer;
 
   try {
-    // Step 1: Create the customer
-    const response = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers.json`, {
-      method: "POST",
+    // Step 1: Search for existing customer by email
+    const searchRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/search.json?query=email:${customer.email}`, {
       headers: {
         "Content-Type": "application/json",
         "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
-      },
-      body: JSON.stringify({ customer })
+      }
     });
 
-    const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: data });
+    const searchData = await searchRes.json();
+    let customerId = searchData.customers?.[0]?.id;
 
-    const customerId = data.customer?.id;
-    if (!customerId) return res.status(500).json({ error: "Customer ID not found after creation" });
+    // Step 2: If not found, create the customer
+    if (!customerId) {
+      const createRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
+        },
+        body: JSON.stringify({ customer })
+      });
 
-    // Step 2: Add metafields for cashback_balance and cashback_preference
+      const createData = await createRes.json();
+      if (!createRes.ok) return res.status(createRes.status).json({ error: createData });
+      customerId = createData.customer?.id;
+      if (!customerId) return res.status(500).json({ error: "Customer created, but ID missing" });
+    }
+
+    // Step 3: Add/Update metafields
     const metafieldsPayload = {
       metafields: [
         {
@@ -57,14 +70,13 @@ export default async function handler(req, res) {
 
     const metaData = await metafieldRes.json();
     if (!metafieldRes.ok) {
-      console.error("Failed to create metafields:", metaData);
-      return res.status(500).json({ error: "Customer created, but metafields failed" });
+      console.error("Metafield creation failed:", metaData);
+      return res.status(500).json({ error: "Customer found/created but metafields failed" });
     }
 
-    return res.status(200).json({ success: true, customer: data.customer });
-
+    return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Customer creation error:", error);
-    return res.status(500).json({ error: "Server error", message: error.message });
+    console.error("Error:", error);
+    return res.status(500).json({ error: "Unexpected server error", message: error.message });
   }
 }
