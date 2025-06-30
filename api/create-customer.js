@@ -9,87 +9,120 @@ export default async function handler(req, res) {
   const SHOPIFY_STORE_DOMAIN = "demoessentiahome.myshopify.com";
   const ADMIN_API_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
 
-  const customerInput = req.body.customer;
+  const input = req.body.customer;
 
   try {
-    // Step 1: Search existing customer by email
-    const searchRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/search.json?query=email:${customerInput.email}`, {
+    // 1. Search existing customer
+    const searchRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/search.json?query=email:${input.email}`, {
       headers: {
-        "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
       }
     });
 
     const searchData = await searchRes.json();
     const existingCustomer = searchData.customers?.[0];
+    let customerId = null;
 
-    if (!existingCustomer) {
-      return res.status(404).json({ error: "Customer not found" });
-    }
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
 
-    const customerId = existingCustomer.id;
+      // 2. Update tags and note
+      const tagsSet = new Set((existingCustomer.tags || "").split(",").map(t => t.trim()));
+      tagsSet.add("trade_account");
+      const updatedTags = Array.from(tagsSet).join(", ");
 
-    // Step 2: Update note and tags
-    const updatedTags = [...new Set((existingCustomer.tags || "").split(",").map(tag => tag.trim()).concat(["trade_account"]))].join(", ");
-
-    const updateCustomerRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customerId}.json`, {
-      method: "PUT",
-      headers: {
-        "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
+      const updateCustomerPayload = {
         customer: {
           id: customerId,
           tags: updatedTags,
-          note: `Company: ${customerInput.company_name || "-"}, Billing: ${customerInput.billing_address || "-"}, Suite: ${customerInput.suite || "-"}, City: ${customerInput.city || "-"}, State: ${customerInput.state || "-"}, Country: ${customerInput.country || "-"}, ZIP: ${customerInput.zip || "-"}, GST: ${customerInput.gst || "-"}`
+          note: input.note || existingCustomer.note || ""
         }
-      })
-    });
+      };
 
-    const updateData = await updateCustomerRes.json();
-    if (!updateCustomerRes.ok) {
-      console.error("Customer update failed:", updateData);
-      return res.status(500).json({ error: "Failed to update existing customer" });
-    }
-
-    // Step 3: Create/Update metafields
-    const metafields = [
-      {
-        namespace: "custom",
-        key: "cashback_balance",
-        type: "number_decimal",
-        value: "0"
-      },
-      {
-        namespace: "cashback",
-        key: "preference",
-        type: "single_line_text_field",
-        value: "discount"
-      }
-    ];
-
-    for (const metafield of metafields) {
-      const saveMetaRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customerId}/metafields.json`, {
-        method: "POST",
+      const updateRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customerId}.json`, {
+        method: "PUT",
         headers: {
-          "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
         },
-        body: JSON.stringify({ metafield })
+        body: JSON.stringify(updateCustomerPayload)
       });
 
-      const metaResData = await saveMetaRes.json();
-      if (!saveMetaRes.ok && !metaResData?.errors?.includes("has already been taken")) {
-        console.error("Metafield update failed:", metaResData);
-        return res.status(500).json({ error: "Metafield creation failed" });
+      if (!updateRes.ok) {
+        const updateErr = await updateRes.json();
+        return res.status(400).json({ error: "Failed to update existing customer", detail: updateErr });
       }
+    } else {
+      // 3. Create new customer
+      const createPayload = {
+        customer: {
+          first_name: input.first_name,
+          last_name: input.last_name,
+          email: input.email,
+          phone: input.phone,
+          password: input.password,
+          password_confirmation: input.password_confirmation,
+          tags: "trade_account",
+          send_email_welcome: false,
+          note: input.note || ""
+        }
+      };
+
+      const createRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
+        },
+        body: JSON.stringify(createPayload)
+      });
+
+      const createData = await createRes.json();
+
+      if (!createRes.ok) {
+        return res.status(createRes.status).json({ error: createData.errors || "Failed to create customer" });
+      }
+
+      customerId = createData.customer?.id;
+    }
+
+    // 4. Add metafields
+    const metafieldsPayload = {
+      metafields: [
+        {
+          namespace: "custom",
+          key: "cashback_balance",
+          type: "number_decimal",
+          value: "0"
+        },
+        {
+          namespace: "cashback",
+          key: "preference",
+          type: "single_line_text_field",
+          value: "discount"
+        }
+      ]
+    };
+
+    const metaRes = await fetch(`https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-04/customers/${customerId}/metafields.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": ADMIN_API_ACCESS_TOKEN
+      },
+      body: JSON.stringify(metafieldsPayload)
+    });
+
+    if (!metaRes.ok) {
+      const metaErr = await metaRes.json();
+      return res.status(500).json({ error: "Customer saved but metafields failed", detail: metaErr });
     }
 
     return res.status(200).json({ success: true });
 
   } catch (err) {
     console.error("Error:", err);
-    return res.status(500).json({ error: "Internal Server Error", message: err.message });
+    return res.status(500).json({ error: "Unexpected server error", message: err.message });
   }
 }
