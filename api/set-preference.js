@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  res.setHeader('Access-Control-Allow-Origin', 'https://essentiahome.com');
+  res.setHeader('Access-Control-Allow-Origin', 'https://www.essentiahome.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
