@@ -3,11 +3,14 @@ import { sendEmail } from "../utils/mailer.js";
 
 export default async function handler(req, res) {
 
-  // ✅ CORS (IMPORTANT)
-  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGIN);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // ✅ CORS FIX (FULL)
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // ✅ Handle preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
